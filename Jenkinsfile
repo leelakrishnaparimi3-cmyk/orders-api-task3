@@ -304,9 +304,23 @@ server {
                 
                 '''
 
-                powershell '''
-                    Set-Content nginx/default.conf "upstream orders_backend { server orders-blue:8080; }`nserver { listen 80; location / { proxy_pass http://orders_backend; } }"
-                '''
+                script {
+    writeFile(
+        file: 'nginx/default.conf',
+        text: '''upstream orders_backend {
+    server orders-blue:8080;
+}
+
+server {
+    listen 80;
+
+    location / {
+        proxy_pass http://orders_backend;
+    }
+}
+'''
+    )
+}
 
                 bat 'docker cp nginx\\default.conf %PROXY%:/etc/nginx/conf.d/default.conf'
                 bat 'docker exec %PROXY% nginx -t'
