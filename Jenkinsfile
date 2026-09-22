@@ -307,7 +307,7 @@ server {
                 script {
     writeFile(
         file: 'nginx/default.conf',
-        text: '''upstream orders_backend {
+        text: """upstream orders_backend {
     server orders-blue:8080;
 }
 
@@ -318,7 +318,7 @@ server {
         proxy_pass http://orders_backend;
     }
 }
-'''
+"""
     )
 }
 
