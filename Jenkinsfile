@@ -44,7 +44,7 @@ pipeline {
         TRAFFIC_PORT = '8080'
         DB_NAME = 'ordersdb'
         DB_USER = 'orders'
-        DB_PASSWORD = credentials('orders-db-password')
+        DB_PASSWORD = credentials('orders_db_password')
     }
 
     stages {
