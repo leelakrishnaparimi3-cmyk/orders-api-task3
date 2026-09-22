@@ -286,28 +286,44 @@ server {
             }
         }
 
-        stage('Rollback') {
-            when {
-                expression {
-                    params.ACTION == 'ROLLBACK'
+       stage('Rollback') {
+    when {
+        expression {
+            params.ACTION == 'ROLLBACK'
+        }
+    }
+
+    steps {
+        bat 'docker image inspect orders-api:%ROLLBACK_VERSION%'
+
+        bat 'docker rm -f orders-blue >nul 2>&1 || exit /b 0'
+        bat 'docker rm -f orders-green >nul 2>&1 || exit /b 0'
+
+        bat 'docker run -d --name orders-blue --network %NETWORK% -p 8081:8080 -e APP_ENV=PRODUCTION -e APP_VERSION=%ROLLBACK_VERSION% -e SPRING_DATASOURCE_URL=jdbc:postgresql://%DB_CONTAINER%:5432/%DB_NAME% -e SPRING_DATASOURCE_USERNAME=%DB_USER% -e SPRING_DATASOURCE_PASSWORD=%DB_PASSWORD% orders-api:%ROLLBACK_VERSION%'
+
+        powershell '''
+            for ($i = 0; $i -lt 30; $i++) {
+                try {
+                    $r = Invoke-WebRequest -UseBasicParsing http://localhost:8081/health -TimeoutSec 3
+
+                    if ($r.StatusCode -eq 200 -and $r.Content -eq "UP") {
+                        exit 0
+                    }
                 }
+                catch {
+                }
+
+                Start-Sleep 2
             }
 
-            steps {
-                bat 'docker image inspect orders-api:%ROLLBACK_VERSION%'
+            docker logs orders-blue
+            throw "Rollback health failed"
+        '''
 
-                bat 'docker rm -f orders-blue >nul 2>&1 || exit /b 0'
-                bat 'docker rm -f orders-green >nul 2>&1 || exit /b 0'
-
-                bat 'docker run -d --name orders-blue --network %NETWORK% -p 8081:8080 -e APP_ENV=PRODUCTION -e APP_VERSION=%ROLLBACK_VERSION% -e SPRING_DATASOURCE_URL=jdbc:postgresql://%DB_CONTAINER%:5432/%DB_NAME% -e SPRING_DATASOURCE_USERNAME=%DB_USER% -e SPRING_DATASOURCE_PASSWORD=%DB_PASSWORD% orders-api:%ROLLBACK_VERSION%'
-
-                
-                '''
-
-                script {
-    writeFile(
-        file: 'nginx/default.conf',
-        text: """upstream orders_backend {
+        script {
+            writeFile(
+                file: 'nginx/default.conf',
+                text: """upstream orders_backend {
     server orders-blue:8080;
 }
 
@@ -319,36 +335,16 @@ server {
     }
 }
 """
-    )
+            )
+        }
+
+        bat 'docker cp nginx\\default.conf %PROXY%:/etc/nginx/conf.d/default.conf'
+        bat 'docker exec %PROXY% nginx -t'
+        bat 'docker exec %PROXY% nginx -s reload'
+
+        echo 'FINAL RESULT: ROLLBACK'
+    }
 }
-
-                bat 'docker cp nginx\\default.conf %PROXY%:/etc/nginx/conf.d/default.conf'
-                bat 'docker exec %PROXY% nginx -t'
-                bat 'docker exec %PROXY% nginx -s reload'
-
-                echo 'FINAL RESULT: ROLLBACK'
-            }
-        }
-        powershell '''
-    for ($i = 0; $i -lt 30; $i++) {
-        try {
-            $r = Invoke-WebRequest -UseBasicParsing http://localhost:8081/health -TimeoutSec 3
-
-            if ($r.StatusCode -eq 200 -and $r.Content -eq "UP") {
-                exit 0
-            }
-        }
-        catch {
-        }
-
-        Start-Sleep 2
-    }
-
-    docker logs orders-blue
-    throw "Rollback health failed"
-'''
-    }
-
     post {
         success {
             echo 'DEPLOYMENT RESULT: SUCCESS'
