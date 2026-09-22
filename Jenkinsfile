@@ -301,15 +301,7 @@ server {
 
                 bat 'docker run -d --name orders-blue --network %NETWORK% -p 8081:8080 -e APP_ENV=PRODUCTION -e APP_VERSION=%ROLLBACK_VERSION% -e SPRING_DATASOURCE_URL=jdbc:postgresql://%DB_CONTAINER%:5432/%DB_NAME% -e SPRING_DATASOURCE_USERNAME=%DB_USER% -e SPRING_DATASOURCE_PASSWORD=%DB_PASSWORD% orders-api:%ROLLBACK_VERSION%'
 
-                powershell '''
-                    Start-Sleep 8
-
-                    $r = Invoke-WebRequest -UseBasicParsing http://localhost:8081/health
-
-                    if ($r.Content -ne "UP") {
-                        docker logs orders-blue
-                        throw "Rollback health failed"
-                    }
+                
                 '''
 
                 powershell '''
@@ -323,6 +315,24 @@ server {
                 echo 'FINAL RESULT: ROLLBACK'
             }
         }
+        powershell '''
+    for ($i = 0; $i -lt 30; $i++) {
+        try {
+            $r = Invoke-WebRequest -UseBasicParsing http://localhost:8081/health -TimeoutSec 3
+
+            if ($r.StatusCode -eq 200 -and $r.Content -eq "UP") {
+                exit 0
+            }
+        }
+        catch {
+        }
+
+        Start-Sleep 2
+    }
+
+    docker logs orders-blue
+    throw "Rollback health failed"
+'''
     }
 
     post {
