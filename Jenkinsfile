@@ -345,6 +345,7 @@ server {
         echo 'FINAL RESULT: ROLLBACK'
     }
 }
+    }
     post {
         success {
             echo 'DEPLOYMENT RESULT: SUCCESS'
